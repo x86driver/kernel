@@ -1,5 +1,5 @@
 # Comment/uncomment the following line to disable/enable debugging
-#DEBUG = y
+DEBUG = y
 
 # Add your debugging flag (or not) to CFLAGS
 ifeq ($(DEBUG),y)
@@ -19,7 +19,8 @@ obj-m	:= simple.o
 
 else
 
-KERNELDIR ?= /lib/modules/$(shell uname -r)/build
+KERNELDIR ?= /usr/src/linux-source-2.6.28/build
+#KERNELDIR ?= /lib/modules/$(shell uname -r)/build
 #KERNELDIR ?= /home/doremi/android/kernel/common/build
 PWD       := $(shell pwd)
 

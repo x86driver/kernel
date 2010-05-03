@@ -3,74 +3,71 @@
 #include <linux/module.h>
 #include <linux/compat.h>
 #include <linux/list.h>
+#include <linux/device.h>
+#include <linux/usb/ch9.h>
+#include <linux/usb/gadget.h>
 
 MODULE_LICENSE("Dual BSD/GPL");
 
-struct request_list {
-	struct list_head list;
-	int data;
-};
+#define REQ_SIZE 32
+struct f_garmin {
+	struct list_head req_head;
+} garmin;
+struct usb_request req_array[REQ_SIZE];
 
-struct request_list req_head;
-
-struct request_list *alloc(void)
+static inline void QUEUE(struct usb_request *p)
 {
-	struct request_list *p = kmalloc(sizeof(struct request_list), GFP_KERNEL);
-	if (likely(p))
-		return p;
-	else {
-		printk(KERN_ALERT "error\n");
-		return NULL;
+	list_add_tail(&p->list, &garmin.req_head);
+}
+
+static inline struct usb_request *DEQUE(void)
+{
+	struct usb_request *tmp;
+        tmp = list_first_entry(&garmin.req_head, struct usb_request, list);
+	list_del(&tmp->list);
+	return tmp;
+}
+
+static void init_request(void)
+{
+	int i;
+	unsigned char *ptr;
+	for (i = 0; i < REQ_SIZE; ++i) {
+		req_array[i].buf = kmalloc(4096, GFP_KERNEL);
+		ptr = req_array[i].buf;
+		*ptr = (unsigned char)i;
 	}
 }
 
-void show(void)
+static void show(void)
 {
-	struct list_head *p;
-	struct request_list *my;
+	struct list_head *p, *n;
+	struct usb_request *req;
+	unsigned char *ptr;
 
-	list_for_each(p, &req_head.list) {
-		my = list_entry(p, struct request_list, list);
-		printk(KERN_ALERT "%d", my->data);
+	list_for_each_safe(p, n, &garmin.req_head) {
+		req = list_entry(p, struct usb_request, list);
+		ptr = req->buf;
+		printk(KERN_ALERT "%d\n", *ptr);
 	}
-	printk(KERN_ALERT "\n");
-}
-
-static inline void PUSH(struct request_list *p)
-{
-	list_add(&p->list, &req_head.list);
-}
-
-static inline void POP(void)
-{
 }
 
 static int hello_init(void)
 {
-	struct request_list *p;
-
-	memset(&req_head, 0, sizeof(req_head));
-	INIT_LIST_HEAD(&req_head.list);
-
-	p = alloc();
-	if (p) {
-		p->data = 1;
-		PUSH(p);
-	}
-
-	p = alloc();
-	if (p) {
-		p->data = 2;
-		PUSH(p);
-	}
-
-	p = alloc();
-	if (p) {
-		p->data = 3;
-		PUSH(p);
-	}
+	int order[] = {1,3,5,2,4};
+	int i;
+	memset(&garmin, 0, sizeof(garmin));
+	INIT_LIST_HEAD(&garmin.req_head);
 	
+	init_request();
+
+	for (i = 0; i < sizeof(order)/sizeof(int); ++i) {
+		QUEUE(&req_array[order[i]]);
+	}
+
+	printk(KERN_ALERT "Size: %d\n", sizeof(req_array));
 	show();
+
         return 0;
 
 }
@@ -78,19 +75,15 @@ static int hello_init(void)
 static void hello_exit(void)
 {
 	struct list_head *p, *n;
-	struct request_list *my;
+	struct usb_request *req;
+	unsigned char *ptr;
 
-	list_for_each_safe(p, n, &req_head.list) {
-		my = list_entry(p, struct request_list, list);
-		printk(KERN_ALERT "We'll free %d\n", my->data);
-//		list_del(&my->list);
-//		kfree(my);
-	}
-	int *ptr = kmalloc(1048576*128, GFP_KERNEL);
-	if (ptr) {
-		printk(KERN_ALERT "成功\n");
-	} else {
-		printk(KERN_ALERT "失敗\n");
+	list_for_each_safe(p, n, &garmin.req_head) {
+		req = list_entry(p, struct usb_request, list);
+		ptr = req->buf;
+		printk(KERN_ALERT "We'll free %d\n", *ptr);
+		list_del(&req->list);
+		kfree(req->buf);
 	}
 }
 
