@@ -12,18 +12,20 @@ MODULE_LICENSE("Dual BSD/GPL");
 #define REQ_SIZE 32
 struct f_garmin {
 	struct list_head req_head;
-} garmin;
+};
+
+static struct f_garmin *_garmin_dev;
 struct usb_request req_array[REQ_SIZE];
 
 static inline void QUEUE(struct usb_request *p)
 {
-	list_add_tail(&p->list, &garmin.req_head);
+	list_add_tail(&p->list, &_garmin_dev->req_head);
 }
 
 static inline struct usb_request *DEQUE(void)
 {
 	struct usb_request *tmp;
-        tmp = list_first_entry(&garmin.req_head, struct usb_request, list);
+        tmp = list_first_entry(&_garmin_dev->req_head, struct usb_request, list);
 	list_del(&tmp->list);
 	return tmp;
 }
@@ -45,7 +47,7 @@ static void show(void)
 	struct usb_request *req;
 	unsigned char *ptr;
 
-	list_for_each_safe(p, n, &garmin.req_head) {
+	list_for_each_safe(p, n, &_garmin_dev->req_head) {
 		req = list_entry(p, struct usb_request, list);
 		ptr = req->buf;
 		printk(KERN_ALERT "%d\n", *ptr);
@@ -56,8 +58,9 @@ static int hello_init(void)
 {
 	int order[] = {1,3,5,2,4};
 	int i;
-	memset(&garmin, 0, sizeof(garmin));
-	INIT_LIST_HEAD(&garmin.req_head);
+//	memset(&_garmin_dev, 0, sizeof(garmin));
+	_garmin_dev = kzalloc(sizeof(struct f_garmin), GFP_KERNEL);
+	INIT_LIST_HEAD(&_garmin_dev->req_head);
 	
 	init_request();
 
@@ -78,7 +81,7 @@ static void hello_exit(void)
 	struct usb_request *req;
 	unsigned char *ptr;
 
-	list_for_each_safe(p, n, &garmin.req_head) {
+	list_for_each_safe(p, n, &_garmin_dev->req_head) {
 		req = list_entry(p, struct usb_request, list);
 		ptr = req->buf;
 		printk(KERN_ALERT "We'll free %d\n", *ptr);
