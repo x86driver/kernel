@@ -19,7 +19,8 @@ obj-m	:= simple.o
 
 else
 
-KERNELDIR ?= /usr/src/linux-source-2.6.28/build
+KERNELDIR ?= /home/shane/kernel/linux-2.6.33/build
+#KERNELDIR ?= /usr/src/linux-source-2.6.28/build
 #KERNELDIR ?= /lib/modules/$(shell uname -r)/build
 #KERNELDIR ?= /home/doremi/android/kernel/common/build
 PWD       := $(shell pwd)
