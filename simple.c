@@ -8,6 +8,7 @@
 #include <linux/usb/gadget.h>
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
+#include <linux/poll.h>
 
 MODULE_LICENSE("Dual BSD/GPL");
 
@@ -16,12 +17,16 @@ struct f_garmin {
 	struct list_head req_head_in;
 	struct list_head req_head_out;
 	struct list_head req_head_int;
+	wait_queue_head_t wait;
+	int data_received;
 };
 
 static struct f_garmin *_garmin_dev;
 struct usb_request req_array_in[REQ_SIZE];
 struct usb_request req_array_out[REQ_SIZE];
 struct usb_request req_array_int[REQ_SIZE];
+
+char global_buf[64];
 
 static inline void QUEUE(struct usb_request *p, struct list_head *head)
 {
@@ -63,7 +68,7 @@ static void show(struct list_head *head)
 		printk(KERN_ALERT "%d\n", *ptr);
 	}
 }
-
+#if 0
 static int hello_init2(void)
 {
 	int order[] = {1,3,5,2,4};
@@ -91,6 +96,7 @@ static int hello_init2(void)
         return 0;
 
 }
+#endif
 
 static void free_request(struct list_head *head)
 {
@@ -109,28 +115,39 @@ static void free_request(struct list_head *head)
 
 static int doremi_open(struct inode *inode, struct file *file)
 {
-	printk(KERN_ALERT "[doremi] open\n");
+	//printk(KERN_ALERT "[doremi] open\n");
 	return 0;
 }
 
 static int doremi_release(struct inode *inode, struct file *file)
 {
-	printk(KERN_ALERT "[doremi] release\n");
+	//printk(KERN_ALERT "[doremi] release\n");
 	return 0;
 }
 
 static ssize_t doremi_read(struct file *file, char __user *buffer,
                              size_t count, loff_t *ppos)
 {
-	printk(KERN_ALERT "[doremi] read\n");
-	return 0;
+	//printk(KERN_ALERT "[doremi] read\n");
+	wait_event_interruptible(_garmin_dev->wait, (_garmin_dev->data_received == 1));
+
+	_garmin_dev->data_received = 0;
+	printk(KERN_ALERT "We will return\n");
+	if (copy_to_user(buffer, global_buf, 4))
+		return -EFAULT;
+//	_garmin_dev->data_received = 0;
+	return 4;
 }
 
 static ssize_t doremi_write(struct file *file, const char __user *buffer,
                                 size_t count, loff_t *ppos)
 {
-	printk(KERN_ALERT "[doremi] write\n");
-	return 0;
+	//printk(KERN_ALERT "[doremi] write\n");
+	if (copy_from_user(global_buf, buffer, 4))
+		return -EFAULT;
+	_garmin_dev->data_received = 1;
+	wake_up(&_garmin_dev->wait);
+	return 4;
 }
 
 static const struct file_operations doremi_fops = {
@@ -165,6 +182,8 @@ static int hello_init(void)
 		printk(KERN_ALERT "Can't register\n");
 		return ret;
 	}
+	_garmin_dev = kzalloc(sizeof(struct f_garmin), GFP_KERNEL);
+	init_waitqueue_head(&_garmin_dev->wait);
 	return 0;
 }
 
